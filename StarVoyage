@@ -1,0 +1,117 @@
+from direct.showbase.ShowBase import ShowBase #Classe para criação de jogo em panda 3D
+from panda3d.core import LVector3, WindowProperties, CardMaker #Possibilita trabalhar vetores 3D
+from direct.task import Task #Agendar funções loop
+import random #módulo para gerar números aleatórios
+from direct.gui.OnscreenText import OnscreenText #Criação de texto para exibir na tela
+
+#Criamos uma classe uqe herdará as funcionalidades da classe showbase
+class StarVoyager(ShowBase): 
+
+    def __init__(self): #método init para construção de objeto
+        super().__init__()
+        
+        #configuração da janela de exibição
+        win_props = WindowProperties()
+        win_props.setSize (1280, 720)
+        self.win.requestProperties(win_props)
+
+        self.set_background_color(0,0,0)
+
+        #configuração da câmera
+        self.disableMouse() #desabilitar controle do mouse
+        self.camera.set_pos(0, -20, 5) #posição da camera no mundo 3D
+        self.camera.set_hpr(0, -10, 0) #rotação no eixo
+
+        #criação do jogador (Nave)
+        self.player = self.create_sprite("spaceship.png")
+        self.player.reparent_to(self.render)
+        self.player.set_pos(0, 0, -1)
+
+        self.accept("arrow_left", self.move_player, [-1])
+        self.accept("arrow_right", self.move_player, [1])
+
+        self.enemies = []
+        self.stars = []
+
+        self.taskMgr.add(self.spawn_enemy, "SpawnEnemyTask") #adiciona a função de spawn de inimigos
+        self.taskMgr.add(self.spawn_star, "SpawnStarTask")
+        self.taskMgr.add(self.update_game, "UpdateGameTask")
+
+        self.score = 0 #inicialização da pontuação do jogador
+        self.display_score() #exibição da pontuação
+
+
+    #Criamos uma função para criar e configurar imagem 2d
+    def create_sprite(self, image_path, scale=1): 
+        cm = CardMaker("sprite") #Criamos o objeto
+        cm.set_frame(-1, 1, -1, 1) #espaço a ser mapeado com a textura da imagem
+        sprite = self.render.attach_new_node(cm.generate())#criando nó de renderização
+        texture = self.loader.load_texture(image_path) #criando a variável textura
+        sprite.set_texture(texture, 1)
+        sprite.set_scale(scale)
+        return sprite
+    #Movimentação no jogo: -1 para a esquerda e 1 para a direita
+
+    def move_player(self, direction): 
+        pos = self.player.get_x() #Posição atual
+
+        if -9 < pos - direction < 9:
+            self.player.set_x(pos + direction)
+    #Criação de asteroides (inimigos) com loop de execução
+    def spawn_enemy(self, task): 
+        if random.random() < 0.01:
+            enemy = self.create_sprite("asteroid.png", scale=1)
+            enemy.reparent_to(self.render) #renderização do panda3D
+            enemy.set_pos(random.uniform(-7, 7), random.uniform(5, 15), 0) #posição inicial do inimigo
+            self.enemies.append(enemy) #criação de novo inimigo
+        return Task.cont
+
+    #Criação de estrelas com loop de execução
+    def spawn_star(self, task): 
+        if random.random() < 0.02: #probabilidade de spawn
+            star = self.create_sprite("star.png", scale=0.5)
+            star.reparent_to(self.render)
+            star.set_pos(random.uniform(-7, 7), random.uniform(5, 15), 0) #posição inicial da estrela
+            self.stars.append(star) #criação de nova estrela
+        return Task.cont
+
+    #Exibir pontuação do jogador
+    def display_score(self):
+        if hasattr(self,'score_text'): #verifica se há pontuação
+            self.score_text.destroy()
+
+        self.score_text = OnscreenText(text=f"Score: {self.score}", pos=(-1.75, 0.9),
+                                       scale= 0.07, fg=(1,1,1,1), align=0)
+        
+    #Atualização do jogo
+    def update_game(self, task):
+        for enemy in self.enemies[:]: #estrutura de repetição para iterar sobre uma cópia da lista para evitar erros
+            enemy.set_y(enemy.get_y() - 0.1)
+
+            #Remoção do inimigo da tela
+            if enemy.get_y() < -5:
+                enemy.remove_node() #removemos o nó da árvore de renderização
+                self.enemies.remove(enemy)
+        
+        #movimentação das estrelas
+        for star in self.stars[:]:
+            star.set_y(star.get_y() - 1.0)
+
+            if star.get_y() < -5:
+                star.remove_node()
+                self.stars.remove(star)
+
+        #Colisão entre nave e estrelas
+        for star in self.stars[:]:
+            if (self.player.get_pos() - star.get_pos()).length() <1.5: #condicional de distância entre nave e estrela
+                star.remove_node() #remoção da estrela
+                self.stars.remove(star)
+                self.score += 1
+                self.display_score()
+
+        #loop de repetição da função até o proximo jogo
+        return Task.cont 
+
+app = StarVoyager() #instância da classe
+app.run()    
+    
